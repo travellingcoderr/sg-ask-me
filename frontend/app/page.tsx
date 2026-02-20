@@ -159,9 +159,13 @@ export default function Home() {
     <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
       <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3">
-        <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
-          SG Ask Me
-        </h1>
+        <div className="flex items-center gap-2">
+          <img
+            src="/images/ask-me-logo.png"
+            alt="ASK - ME"
+            className="h-8 w-auto"
+          />
+        </div>
       </header>
 
       {/* Messages */}
