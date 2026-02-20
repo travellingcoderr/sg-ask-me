@@ -37,15 +37,28 @@ async def chat_stream(body: ChatIn):
     )
 
     def gen():
-        with provider.stream_chat(
-            model=model,
-            input_items=input_items,
-            previous_response_id=body.previous_response_id,
-        ) as stream:
-            for event in stream:
-                if event.kind == "delta" and event.text:
-                    yield sse("delta", event.text)
-                elif event.kind == "done" and event.response_id:
-                    yield sse("done", event.response_id)
+        try:
+            with provider.stream_chat(
+                model=model,
+                input_items=input_items,
+                previous_response_id=body.previous_response_id,
+            ) as stream:
+                event_count = 0
+                for event in stream:
+                    event_count += 1
+                    logger.debug(f"Stream event {event_count}: kind={event.kind}")
+                    if event.kind == "delta" and event.text:
+                        yield sse("delta", event.text)
+                    elif event.kind == "done" and event.response_id:
+                        logger.info(f"Stream completed: {event_count} events, response_id={event.response_id}")
+                        yield sse("done", event.response_id)
+                        break
+                if event_count == 0:
+                    logger.warning("No events received from stream")
+        except Exception as e:
+            logger.error(f"Error in stream generator: {e}", exc_info=True)
+            # Send error as SSE event
+            yield sse("error", f"Stream error: {str(e)}")
+            raise
 
     return StreamingResponse(gen(), media_type="text/event-stream")

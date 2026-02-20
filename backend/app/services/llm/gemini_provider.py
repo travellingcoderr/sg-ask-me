@@ -22,18 +22,50 @@ class _GeminiStreamAdapter:
         pass
 
     def __iter__(self) -> Iterator[StreamEvent]:
+        import logging
+        logger = logging.getLogger(__name__)
         full_text = ""
-        for chunk in self._stream:
-            if chunk.text:
-                full_text += chunk.text
-                yield StreamEvent(kind="delta", text=chunk.text)
-            # Gemini doesn't provide response_id in the same way, generate one if needed
-            if chunk.candidates and chunk.candidates[0].finish_reason:
-                # Use a simple hash or timestamp as response_id
+        chunk_count = 0
+        
+        try:
+            for chunk in self._stream:
+                chunk_count += 1
+                logger.debug(f"Received chunk {chunk_count}: {type(chunk)}")
+                
+                # Check if chunk has text attribute
+                if hasattr(chunk, 'text') and chunk.text:
+                    full_text += chunk.text
+                    yield StreamEvent(kind="delta", text=chunk.text)
+                
+                # Check for completion
+                finish_reason = None
+                if hasattr(chunk, 'candidates') and chunk.candidates:
+                    finish_reason = getattr(chunk.candidates[0], 'finish_reason', None)
+                elif hasattr(chunk, 'finish_reason'):
+                    finish_reason = chunk.finish_reason
+                
+                if finish_reason:
+                    # Use a simple hash as response_id
+                    import hashlib
+                    self._response_id = hashlib.md5(full_text.encode()).hexdigest()[:16]
+                    logger.info(f"Stream completed: {chunk_count} chunks, finish_reason={finish_reason}")
+                    yield StreamEvent(kind="done", response_id=self._response_id)
+                    break
+            
+            # If we exit the loop without a done event, send one anyway
+            if not self._response_id and full_text:
+                import hashlib
+                self._response_id = hashlib.md5(full_text.encode()).hexdigest()[:16]
+                logger.info(f"Stream ended: {chunk_count} chunks processed")
+                yield StreamEvent(kind="done", response_id=self._response_id)
+        except Exception as e:
+            logger.error(f"Error iterating Gemini stream: {e}", exc_info=True)
+            # Yield done event even on error so the client knows the stream ended
+            if full_text:
                 import hashlib
                 self._response_id = hashlib.md5(full_text.encode()).hexdigest()[:16]
                 yield StreamEvent(kind="done", response_id=self._response_id)
-                break
+            raise
 
 
 class GeminiProvider:
@@ -130,6 +162,14 @@ class GeminiProvider:
         last_message = messages[-1]["parts"][0] if messages else ""
         
         # Stream the response
-        response = chat.send_message(last_message, stream=True)
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"Calling Gemini API with model: {gemini_model_name}, message length: {len(last_message)}")
         
-        return _GeminiStreamAdapter(response)
+        try:
+            response = chat.send_message(last_message, stream=True)
+            logger.info("Gemini API call successful, starting stream")
+            return _GeminiStreamAdapter(response)
+        except Exception as e:
+            logger.error(f"Gemini API call failed: {e}", exc_info=True)
+            raise
