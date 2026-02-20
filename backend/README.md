@@ -76,6 +76,34 @@ Copy `.env.example` to `.env` and set:
 
 ---
 
+## Virtual environment (recommended)
+
+Using a virtual environment keeps this project’s dependencies separate from your system Python and any globally installed packages, so you avoid version conflicts and “command not found” for tools like `uvicorn`.
+
+**Create and use a venv from the repo root** (so one venv can serve both backend and any other Python tooling in the repo):
+
+```bash
+# From the repository root (sg-ask-me/)
+python3 -m venv .venv
+source .venv/bin/activate   # On Windows: .venv\Scripts\activate
+
+cd backend
+pip install -e .
+```
+
+**Or create a venv inside `backend/`** (backend-only isolation):
+
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate   # On Windows: .venv\Scripts\activate
+pip install -e .
+```
+
+After activation, your prompt usually shows `(.venv)`. All `pip` and `python` commands (and `uvicorn`) use the venv; when you’re done, run `deactivate`.
+
+---
+
 ## Running locally
 
 ```bash
@@ -83,12 +111,60 @@ cd backend
 cp .env.example .env
 # Edit .env and set OPENAI_API_KEY, REDIS_URL, etc.
 
+# Ensure your virtual environment is activated (see above), then:
 pip install -e .
 uvicorn app.main:app --reload --port 8000
 ```
 
+If you don’t want to activate the venv, run uvicorn via the venv’s Python:
+
+```bash
+cd backend
+# If the venv is in repo root (sg-ask-me/.venv):
+../.venv/bin/python -m uvicorn app.main:app --reload --port 8000
+# If the venv is in backend (backend/.venv):
+.venv/bin/python -m uvicorn app.main:app --reload --port 8000
+```
+
 - Health: `GET http://localhost:8000/health`
-- Chat stream: `POST http://localhost:8000/api/chat/stream` with JSON `{"message": "Hello"}` (and optional `previous_response_id`).
+- Chat stream: `POST http://localhost:8000/api/chat/stream` with JSON `{"message": "Hello"}` (and optional `previous_response_id`). Example:
+
+  ```bash
+  curl -X POST http://localhost:8000/api/chat/stream \
+    -H "Content-Type: application/json" \
+    -d '{"message": "Hello"}'
+  ```
+
+---
+
+## Logs
+
+All application and request logs go to **stdout** in the **terminal where you started uvicorn**. That’s where you see:
+
+- Each request, e.g. `"POST /api/chat/stream HTTP/1.1" 200`
+- Errors and stack traces if a request fails
+- Any `print()` or `logger` output from your code
+
+**To see more detail:** set `LOG_LEVEL=DEBUG` in `.env` and restart uvicorn.
+
+**If curl seems to hang or you get no response:** keep the uvicorn terminal visible and run curl again; you should see the request line and any error right there. Use `curl -v` to see connection and response headers on the curl side. The stream can take a few seconds before the first chunk (OpenAI latency).
+
+---
+
+## Troubleshooting
+
+### POST /api/chat/stream returns 500 or "Connection refused" (Redis)
+
+The chat stream endpoint uses **Redis** for rate limiting. If Redis is not running, you used to get a 500. The app now **skips rate limiting** when Redis is unavailable, so the API works without Redis for local dev.
+
+- **To use rate limiting**: Start Redis (e.g. `redis-server` or `brew services start redis` on macOS). Set `REDIS_URL` in `.env` if needed (default is `redis://localhost:6379/0`).
+- **To test without Redis**: No change needed; the endpoint will work and rate limiting will be skipped.
+
+### Other 500s or curl errors
+
+- **Check server is running**: `GET http://localhost:8000/health` should return 200.
+- **Check `.env`**: `OPENAI_API_KEY` must be set for the default OpenAI provider; otherwise the LLM call will fail.
+- **Check request format**: `POST /api/chat/stream` expects `Content-Type: application/json` and body `{"message": "Your text"}`.
 
 ---
 
