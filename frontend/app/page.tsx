@@ -160,6 +160,11 @@ export default function Home() {
       {/* Header */}
       <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3">
         <div className="flex items-center gap-2">
+        <img
+            src="/images/purple-logo.png"
+            alt="ASK - ME"
+            className="h-8 w-auto"
+          />
           <img
             src="/images/ask-me-logo.png"
             alt="ASK - ME"
