@@ -4,6 +4,13 @@ Next.js React frontend for the AI chat application.
 
 ## Setup
 
+**Using Makefile (recommended):**
+```bash
+cd frontend
+make install
+```
+
+**Or using npm directly:**
 ```bash
 cd frontend
 npm install
@@ -11,11 +18,27 @@ npm install
 
 ## Development
 
+**Using Makefile:**
+```bash
+make dev
+```
+
+**Or using npm:**
 ```bash
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+### Available shortcuts (Makefile)
+
+- `make install` - Install dependencies (`npm install`)
+- `make dev` - Run development server (`npm run dev`)
+- `make build` - Build for production (`npm run build`)
+- `make start` - Start production server (`npm start`)
+- `make lint` - Run linter (`npm run lint`)
+- `make clean` - Clean build artifacts and node_modules
+- `make help` - Show all available commands
 
 ## Configuration
 

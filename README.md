@@ -23,6 +23,14 @@ Backend runs on http://localhost:8000
 
 ### Frontend
 
+**Using Makefile (recommended):**
+```bash
+cd frontend
+make install  # or: npm install
+make dev      # or: npm run dev
+```
+
+**Or using npm directly:**
 ```bash
 cd frontend
 npm install
