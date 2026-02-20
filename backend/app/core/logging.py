@@ -57,6 +57,7 @@ def setup_logging() -> None:
     Call once at startup.
     """
     log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+    app_env = os.getenv("APP_ENV", "local").lower()
 
     root = logging.getLogger()
     root.setLevel(log_level)
@@ -66,15 +67,67 @@ def setup_logging() -> None:
 
     handler = logging.StreamHandler(sys.stdout)
     handler.setLevel(log_level)
-    handler.setFormatter(JsonFormatter())
-
+    
+    # Use simpler format for local dev, JSON for production
+    if app_env == "local":
+        # Simple readable format for local development
+        # Format: timestamp LEVEL logger_name | message
+        # Note: uvicorn uses "uvicorn.error" logger for ALL its messages (startup, shutdown, etc.), not just errors
+        # The LEVEL field shows the actual severity: INFO=normal, ERROR/WARNING=problems
+        class LevelFormatter(logging.Formatter):
+            """Formatter that emphasizes log levels for clarity."""
+            LEVEL_COLORS = {
+                'DEBUG': '\033[36m',    # Cyan
+                'INFO': '\033[32m',     # Green
+                'WARNING': '\033[33m',  # Yellow
+                'ERROR': '\033[31m',    # Red
+                'CRITICAL': '\033[35m', # Magenta
+            }
+            RESET = '\033[0m'
+            
+            def format(self, record):
+                # Add color to level name
+                levelname = record.levelname
+                if levelname in self.LEVEL_COLORS:
+                    colored_level = f"{self.LEVEL_COLORS[levelname]}{levelname:8s}{self.RESET}"
+                else:
+                    colored_level = f"{levelname:8s}"
+                
+                # Format: timestamp LEVEL logger_name | message
+                message = record.getMessage()
+                
+                # Handle exception tracebacks
+                if record.exc_info:
+                    # Format exception info using parent class
+                    exc_text = self.formatException(record.exc_info)
+                    message = f"{message}\n{exc_text}"
+                
+                return (f"{self.formatTime(record, self.datefmt)} "
+                        f"{colored_level} "
+                        f"{record.name:20s} | "
+                        f"{message}")
+        
+        formatter = LevelFormatter(datefmt="%Y-%m-%d %H:%M:%S")
+    else:
+        formatter = JsonFormatter()
+    
+    handler.setFormatter(formatter)
     root.addHandler(handler)
 
     # Make uvicorn logs use root handler/format
+    # Uvicorn uses these specific logger names:
+    # - "uvicorn": general server logs
+    # - "uvicorn.error": error logs (exceptions, startup issues)
+    # - "uvicorn.access": HTTP access logs (request/response)
+    # By clearing their handlers and setting propagate=True, we route all uvicorn
+    # logs through our root handler/formatter while preserving the logger name.
     for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
         logger = logging.getLogger(name)
         logger.handlers.clear()
         logger.propagate = True
+    
+    # Log startup message so we know logging is working
+    root.info(f"Logging configured: level={log_level}, env={app_env}")
 
 
 class RequestIdMiddleware(BaseHTTPMiddleware):

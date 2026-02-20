@@ -65,14 +65,27 @@ Copy `.env.example` to `.env` and set:
 
 | Variable | Purpose |
 |----------|--------|
-| `OPENAI_API_KEY` | Required for the default OpenAI provider. |
+| `OPENAI_API_KEY` | Required for OpenAI provider. Get from [platform.openai.com](https://platform.openai.com/api-keys). |
+| `GEMINI_API_KEY` | Required for Gemini provider. Get from [Google AI Studio](https://aistudio.google.com/apikey) (free tier available). |
 | `REDIS_URL` | Used for rate limiting (e.g. `redis://localhost:6379/0`). |
 | `DATABASE_URL` | For future DB use (e.g. `postgresql+psycopg://user:pass@host/db`). |
 | `CORS_ORIGINS` | Comma-separated origins for CORS (e.g. `http://localhost:3000`). |
 | `APP_ENV` | e.g. `local` / `production` for environment-specific behavior. |
-| `LLM_PROVIDER` | `openai` (default) or another provider key; the factory uses this to choose the implementation. |
+| `LLM_PROVIDER` | `openai` (default) or `gemini`; the factory uses this to choose the implementation. |
+| `LLM_MODEL` | Optional; model name (defaults: `gpt-4o-mini` for OpenAI, auto-selected for Gemini). Gemini provider will auto-select an available model from: `gemini-3-flash-preview` (free tier), `gemini-1.5-flash`, `gemini-1.5-pro`. Check logs for available models when using Gemini. |
 | `API_KEY` | Optional; if set, `X-API-Key` is required by protected routes. |
 | `LOG_LEVEL` | Optional; e.g. `DEBUG`, `INFO`. |
+
+**LLM Provider Pricing:**
+
+- **OpenAI (GPT-4o-mini)**: ~$0.25/$2.00 per 1M tokens (input/output). See [OpenAI Pricing](https://openai.com/api/pricing).
+- **Google Gemini (Free tier)**: Gemini 3 Flash Preview is **completely free** (input/output). See [Gemini Pricing](https://ai.google.dev/gemini-api/docs/pricing).
+
+To use Gemini (free tier):
+1. Get API key from [Google AI Studio](https://aistudio.google.com/apikey)
+2. Set `GEMINI_API_KEY` in `.env`
+3. Set `LLM_PROVIDER=gemini` in `.env`
+4. Install dependencies: `pip install -e .` (includes `google-generativeai`)
 
 ---
 
@@ -104,7 +117,49 @@ After activation, your prompt usually shows `(.venv)`. All `pip` and `python` co
 
 ---
 
+## Checking code before running
+
+**Quick syntax and import check:**
+
+```bash
+cd backend
+# With venv activated:
+python check.py
+# Or without activation:
+../.venv/bin/python check.py  # if venv is in repo root
+# or
+.venv/bin/python check.py      # if venv is in backend
+```
+
+This checks all Python files for syntax errors and verifies imports work. Run this before starting uvicorn to catch errors early.
+
+**Other options:**
+
+- **Python's built-in compiler:** `python -m py_compile app/**/*.py` (checks syntax only)
+- **Type checking (if you add mypy):** `mypy app/` (requires `pip install mypy`)
+- **Linting (if you add ruff):** `ruff check app/` (requires `pip install ruff`)
+
+---
+
 ## Running locally
+
+### Quick start (using shortcuts)
+
+**Option 1: Using Makefile (recommended)**
+```bash
+cd backend
+make install    # Install dependencies
+make dev        # Start development server
+```
+
+**Option 2: Using shell script**
+```bash
+cd backend
+pip install -e .  # First time only
+./dev.sh          # Start development server
+```
+
+### Manual commands
 
 ```bash
 cd backend
@@ -113,8 +168,21 @@ cp .env.example .env
 
 # Ensure your virtual environment is activated (see above), then:
 pip install -e .
+
+# Optional: Check code first
+make check  # or: python check.py
+
 uvicorn app.main:app --reload --port 8000
 ```
+
+### Available shortcuts (Makefile)
+
+- `make install` - Install dependencies (`pip install -e .`)
+- `make dev` - Run development server with auto-reload
+- `make run` - Run production server (no reload)
+- `make check` - Check code syntax and imports
+- `make clean` - Clean build artifacts
+- `make help` - Show all available commands
 
 If you don’t want to activate the venv, run uvicorn via the venv’s Python:
 
@@ -145,9 +213,30 @@ All application and request logs go to **stdout** in the **terminal where you st
 - Errors and stack traces if a request fails
 - Any `print()` or `logger` output from your code
 
-**To see more detail:** set `LOG_LEVEL=DEBUG` in `.env` and restart uvicorn.
+**Log format:** In local development (`APP_ENV=local`), logs use a simple readable format. In production, logs are JSON for aggregation tools.
 
-**If curl seems to hang or you get no response:** keep the uvicorn terminal visible and run curl again; you should see the request line and any error right there. Use `curl -v` to see connection and response headers on the curl side. The stream can take a few seconds before the first chunk (OpenAI latency).
+**If you're not seeing any logs:**
+
+1. **Verify uvicorn is running:** Check the terminal where you ran `uvicorn app.main:app --reload --port 8000`. You should see startup messages like:
+   ```
+   INFO:     Uvicorn running on http://127.0.0.1:8000
+   INFO:     Logging configured: level=INFO, env=local
+   ```
+
+2. **Test the health endpoint first:** Run `curl http://localhost:8000/health` in another terminal. You should see a log line in the uvicorn terminal showing the GET request.
+
+3. **Check if the request reaches the server:** When you POST to `/api/chat/stream`, you should see log lines like:
+   ```
+   INFO:     Chat stream request received: message='Hello...'
+   INFO:     Starting LLM stream
+   ```
+   If you don't see these, the request isn't reaching your route handler.
+
+4. **Use verbose curl:** Run `curl -v` to see if the connection is established and what HTTP status you get.
+
+5. **Increase log level:** Set `LOG_LEVEL=DEBUG` in `.env` and restart uvicorn for more detail.
+
+**If curl seems to hang:** The stream can take a few seconds before the first chunk (OpenAI latency). Watch the uvicorn terminal for errors while waiting.
 
 ---
 
