@@ -8,6 +8,11 @@ services:
     ports: ["5432:5432"]
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7
@@ -15,23 +20,39 @@ services:
 
   backend:
     build: ./backend
-    env_file: .env
+    env_file: ./backend/.env
     environment:
       DATABASE_URL: postgresql+psycopg://app:app@postgres:5432/chatdb
       REDIS_URL: redis://redis:6379/0
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-      # CORS for Next.js dev/prod
-      CORS_ORIGINS: http://localhost:3000
-      APP_ENV: local
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+      LLM_MODEL: ${LLM_MODEL:-}
+      # CORS for frontend (both dev and prod)
+      CORS_ORIGINS: http://localhost:3000,http://frontend:3000
+      APP_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
     ports: ["8000:8000"]
-    depends_on: [postgres, redis]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
 
-  web:
-    build: ./web
+  frontend:
+    build: ./frontend
     environment:
-      NEXT_PUBLIC_API_BASE: http://localhost:8000
+      NEXT_PUBLIC_API_URL: http://localhost:8000
     ports: ["3000:3000"]
-    depends_on: [backend]
+    depends_on:
+      backend:
+        condition: service_started
+    volumes:
+      # Mount source for hot reload in development
+      - ./frontend/app:/app/app
+      - ./frontend/public:/app/public
+      - /app/node_modules
+      - /app/.next
 
 volumes:
   pgdata:

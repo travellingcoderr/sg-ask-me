@@ -1,0 +1,12 @@
+# Example override file for development
+# Copy to docker-compose.override.yml to customize Docker setup
+# This file is automatically loaded by docker-compose
+
+services:
+  backend:
+    # Uncomment to mount source for hot reload
+    # volumes:
+    #   - ./backend/app:/app/app
+
+  frontend:
+    # Hot reload is already enabled via volumes in main docker-compose.yml
