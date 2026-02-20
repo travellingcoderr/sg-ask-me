@@ -16,7 +16,10 @@ RUN npm install
 
 # Copy source code
 COPY app ./app
-COPY public ./public 2>/dev/null || mkdir -p public
+
+# Copy public directory (create it first, then copy - will work even if empty)
+RUN mkdir -p public
+COPY public ./public/
 
 # Expose port
 EXPOSE 3000
